@@ -1,0 +1,6 @@
+{
+  "name": "Doctor Tracker API",
+  "description": "Standalone Node.js, Express, and Mongoose TypeScript backend for clinical doctor and patient tracking with full-text and compound indexing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
