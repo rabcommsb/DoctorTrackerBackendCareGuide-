@@ -15,6 +15,18 @@ export const ALLOWED_JWT_ALGORITHMS: jwt.Algorithm[] = ['HS256'];
 export const DEFAULT_ACCESS_TOKEN_TTL = '15m'; // 900 seconds
 export const DEFAULT_REFRESH_TOKEN_TTL = '7d';
 
+const TIMESPAN_REGEX = /^\d+\s*(ms|s|m|h|d|w|y)?$/i;
+
+export const resolveAccessExpiresIn = (): string => {
+  const raw = process.env.JWT_EXPIRES_IN?.trim();
+  return raw && TIMESPAN_REGEX.test(raw) ? raw : DEFAULT_ACCESS_TOKEN_TTL;
+};
+
+export const resolveRefreshExpiresIn = (): string => {
+  const raw = process.env.JWT_REFRESH_EXPIRES_IN?.trim();
+  return raw && TIMESPAN_REGEX.test(raw) ? raw : DEFAULT_REFRESH_TOKEN_TTL;
+};
+
 /**
  * Ephemeral CSPRNG fallback generated strictly via `node:crypto` (256-bit / 32 bytes)
  * when `process.env.JWT_SECRET` is not injected in local/preview sandboxes.
@@ -37,13 +49,20 @@ export const getAccessSecret = (): string => {
 };
 
 export const getRefreshSecret = (): string => {
-  const envSecret = process.env.JWT_REFRESH_SECRET?.trim();
-  if (envSecret && envSecret.length >= 32) {
-    return envSecret;
+  const envRefreshSecret = process.env.JWT_REFRESH_SECRET?.trim();
+  if (envRefreshSecret && envRefreshSecret.length >= 32) {
+    return envRefreshSecret;
+  }
+  const envAccessSecret = process.env.JWT_SECRET?.trim();
+  if (envAccessSecret && envAccessSecret.length >= 32) {
+    return crypto
+      .createHmac('sha256', envAccessSecret)
+      .update('doctor-tracker-refresh-secret')
+      .digest('hex');
   }
   if (process.env.NODE_ENV === 'production') {
     throw new Error(
-      'CRITICAL SECURITY FAULT: JWT_REFRESH_SECRET environment variable must be set and contain at least 256 bits (32 characters) of entropy in production.'
+      'CRITICAL SECURITY FAULT: JWT_SECRET environment variable must be set and contain at least 256 bits (32 characters) of entropy in production.'
     );
   }
   return runtimeEphemeralRefreshSecret;
@@ -74,8 +93,7 @@ export const signAccessToken = (payload: {
   email: string;
   role: 'admin';
 }): string => {
-  const expiresIn = (process.env.JWT_EXPIRES_IN ||
-    DEFAULT_ACCESS_TOKEN_TTL) as SignOptions['expiresIn'];
+  const expiresIn = resolveAccessExpiresIn() as SignOptions['expiresIn'];
 
   const options: SignOptions = {
     algorithm: 'HS256',
@@ -93,8 +111,7 @@ export const signRefreshToken = (payload: {
   email: string;
   role: 'admin';
 }): string => {
-  const expiresIn = (process.env.JWT_REFRESH_EXPIRES_IN ||
-    DEFAULT_REFRESH_TOKEN_TTL) as SignOptions['expiresIn'];
+  const expiresIn = resolveRefreshExpiresIn() as SignOptions['expiresIn'];
 
   const options: SignOptions = {
     algorithm: 'HS256',

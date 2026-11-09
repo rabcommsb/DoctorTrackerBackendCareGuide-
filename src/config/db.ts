@@ -1,17 +1,65 @@
 import mongoose from 'mongoose';
-import { MongoMemoryServer } from 'mongodb-memory-server';
 import { User } from '../models/User.ts';
 import { Doctor } from '../models/Doctor.ts';
 import { Patient } from '../models/Patient.ts';
-import { seedDatabase } from '../seed/seed.ts';
 
-let memoryServer: MongoMemoryServer | null = null;
-let connectionMode: 'external' | 'in-memory' | 'disconnected' = 'disconnected';
-let activeHost = '';
-let externalConnectionWarning: string | null = null;
+interface MongooseGlobalCache {
+  conn: typeof mongoose | null;
+  promise: Promise<typeof mongoose> | null;
+  mode: 'external' | 'in-memory' | 'disconnected';
+  host: string;
+  warning: string | null;
+}
+
+declare global {
+  // eslint-disable-next-line no-var
+  var __mongooseCache: MongooseGlobalCache | undefined;
+}
+
+const cached: MongooseGlobalCache =
+  globalThis.__mongooseCache ??
+  (globalThis.__mongooseCache = {
+    conn: null,
+    promise: null,
+    mode: 'disconnected',
+    host: '',
+    warning: null,
+  });
 
 const sanitizeHost = (uriOrHost: string): string => {
   return uriOrHost.replace(/\/\/([^:]+):([^@]+)@/, '//***:***@');
+};
+
+/**
+ * Normalizes and validates a MongoDB connection string from process.env.MONGODB_URI.
+ * Strips accidental surrounding quotes or `MONGODB_URI=` prefixes and verifies
+ * that the scheme starts with `mongodb://` or `mongodb+srv://`.
+ */
+const normalizeMongoUri = (raw?: string): string | null => {
+  if (!raw) return null;
+
+  let cleaned = raw.trim();
+  if (cleaned.startsWith('MONGODB_URI=')) {
+    cleaned = cleaned.slice('MONGODB_URI='.length).trim();
+  }
+  if (
+    (cleaned.startsWith('"') && cleaned.endsWith('"')) ||
+    (cleaned.startsWith("'") && cleaned.endsWith("'"))
+  ) {
+    cleaned = cleaned.slice(1, -1).trim();
+  }
+
+  if (
+    !cleaned ||
+    cleaned === 'MY_MONGODB_URI' ||
+    cleaned.includes('<username>') ||
+    cleaned.includes('<password>') ||
+    (!cleaned.startsWith('mongodb://') && !cleaned.startsWith('mongodb+srv://'))
+  ) {
+    return null;
+  }
+
+  return cleaned;
 };
 
 export interface DbStatus {
@@ -42,108 +90,81 @@ const READY_STATE_LABELS: Record<number, string> = {
   3: 'disconnecting',
 };
 
-/**
- * Connects to MongoDB using process.env.MONGODB_URI.
- * Automatically falls back to an embedded MongoMemoryServer instance when
- * MONGODB_URI is not configured or unreachable in the preview environment.
- */
-export const connectDB = async (forceReconnect = false): Promise<typeof mongoose> => {
-  if (mongoose.connection.readyState === 1 && !forceReconnect) {
-    return mongoose;
-  }
+const establishConnection = async (): Promise<typeof mongoose> => {
+  const validUri = normalizeMongoUri(process.env.MONGODB_URI);
 
-  if (forceReconnect && mongoose.connection.readyState !== 0) {
-    await mongoose.disconnect();
-  }
-
-  const configuredUri = process.env.MONGODB_URI?.trim();
-  const isPlaceholder =
-    !configuredUri ||
-    configuredUri === 'MY_MONGODB_URI' ||
-    configuredUri === 'mongodb://localhost:27017/doctor-tracker';
-
-  if (!isPlaceholder && configuredUri) {
+  if (validUri) {
     try {
-      const conn = await mongoose.connect(configuredUri, {
+      const conn = await mongoose.connect(validUri, {
         dbName: 'doctor-tracker',
-        serverSelectionTimeoutMS: 6000,
+        serverSelectionTimeoutMS: 5000,
       });
-      connectionMode = 'external';
-      activeHost = sanitizeHost(conn.connection.host || 'doctortracker.bc7oooa.mongodb.net');
-      externalConnectionWarning = null;
-      await syncModelIndexes();
-      console.log(`[db] MongoDB Atlas connected (external): ${activeHost} / db: ${conn.connection.name}`);
+      cached.mode = 'external';
+      cached.host = sanitizeHost(conn.connection.host || 'mongodb-atlas');
+      cached.warning = null;
+      console.log(
+        `[db] MongoDB connected (external): ${cached.host} / db: ${conn.connection.name}`
+      );
       return conn;
     } catch (err) {
-      externalConnectionWarning = (err as Error).message;
-      console.warn(
-        `[db] External MONGODB_URI connection failed (${externalConnectionWarning}). Falling back to in-memory MongoDB...`
+      cached.warning = (err as Error).message;
+      if (process.env.VERCEL) {
+        throw err;
+      }
+      console.log(
+        `[db] External MONGODB_URI unreachable (${cached.warning}). Falling back to local in-memory MongoDB.`
       );
-    }
-  } else if (configuredUri === 'mongodb://localhost:27017/doctor-tracker') {
-    try {
-      const conn = await mongoose.connect(configuredUri, {
-        dbName: 'doctor-tracker',
-        serverSelectionTimeoutMS: 1500,
-      });
-      connectionMode = 'external';
-      activeHost = sanitizeHost(conn.connection.host);
-      externalConnectionWarning = null;
-      await syncModelIndexes();
-      console.log(`[db] MongoDB connected (local): ${activeHost}`);
-      return conn;
-    } catch {
-      console.log('[db] Local MongoDB not running on 27017; starting in-memory MongoDB server...');
     }
   }
 
-  // Fallback: start MongoMemoryServer
-  if (!memoryServer) {
-    memoryServer = await MongoMemoryServer.create({
-      instance: {
-        dbName: 'doctor-tracker',
-      },
-    });
-  }
+  // Local dev fallback: dynamically import MongoMemoryServer only when needed
+  const { MongoMemoryServer } = await import('mongodb-memory-server');
+  const memoryServer = await MongoMemoryServer.create({
+    instance: {
+      dbName: 'doctor-tracker',
+    },
+  });
 
   const memoryUri = memoryServer.getUri('doctor-tracker');
   const conn = await mongoose.connect(memoryUri);
-  connectionMode = 'in-memory';
-  activeHost = '127.0.0.1 (in-memory)';
-
-  await syncModelIndexes();
-  console.log(`[db] MongoDB connected (in-memory fallback): ${conn.connection.name}`);
+  cached.mode = 'in-memory';
+  cached.host = '127.0.0.1 (in-memory)';
+  console.log(`[db] MongoDB connected (in-memory): ${conn.connection.name}`);
   return conn;
 };
 
 /**
- * Calls syncIndexes() for each Mongoose model on startup and seeds the B6 dataset
- * (1 admin user, 25 doctors, 200 patients over 60 days) if the database is empty.
+ * Connects to MongoDB and caches the connection and pending promise on `globalThis.__mongooseCache`
+ * so Vercel serverless warm invocations reuse the active connection without reconnecting.
+ * Does NOT call `syncIndexes()` on requests (index syncing is restricted to `src/seed/seed.ts`).
  */
-export const syncModelIndexes = async (): Promise<void> => {
-  await Promise.all([
-    User.createCollection().catch(() => undefined),
-    Doctor.createCollection().catch(() => undefined),
-    Patient.createCollection().catch(() => undefined),
-  ]);
-
-  await Promise.all([
-    User.syncIndexes(),
-    Doctor.syncIndexes(),
-    Patient.syncIndexes(),
-  ]);
-
-  const [doctorCount, patientCount] = await Promise.all([
-    Doctor.countDocuments(),
-    Patient.countDocuments(),
-  ]);
-
-  if (doctorCount === 0 && patientCount === 0) {
-    const result = await seedDatabase();
-    console.log(
-      `[db] Initial B6 seed provisioned: ${result.doctorsCreated} doctors, ${result.patientsCreated} patients, admin: ${result.adminEmail}`
-    );
+export const connectDB = async (
+  forceReconnect = false
+): Promise<typeof mongoose> => {
+  if (forceReconnect && mongoose.connection.readyState !== 0) {
+    await mongoose.disconnect();
+    cached.conn = null;
+    cached.promise = null;
   }
+
+  if (cached.conn && mongoose.connection.readyState === 1) {
+    return cached.conn;
+  }
+
+  if (mongoose.connection.readyState === 1) {
+    cached.conn = mongoose;
+    return mongoose;
+  }
+
+  if (!cached.promise) {
+    cached.promise = establishConnection().catch((err) => {
+      cached.promise = null;
+      throw err;
+    });
+  }
+
+  cached.conn = await cached.promise;
+  return cached.conn;
 };
 
 export const getDbStatus = async (): Promise<DbStatus> => {
@@ -155,7 +176,7 @@ export const getDbStatus = async (): Promise<DbStatus> => {
       connected: false,
       readyState,
       readyStateLabel: READY_STATE_LABELS[readyState] || 'unknown',
-      mode: connectionMode,
+      mode: cached.mode,
       host: 'none',
       databaseName: 'doctor-tracker',
       collections: [],
@@ -180,8 +201,12 @@ export const getDbStatus = async (): Promise<DbStatus> => {
           name: String(idx.name || ''),
           key: (idx.key as Record<string, unknown>) || {},
           ...(idx.unique ? { unique: Boolean(idx.unique) } : {}),
-          ...(idx.textIndexVersion ? { textIndexVersion: Number(idx.textIndexVersion) } : {}),
-          ...(idx.weights ? { weights: idx.weights as Record<string, number> } : {}),
+          ...(idx.textIndexVersion
+            ? { textIndexVersion: Number(idx.textIndexVersion) }
+            : {}),
+          ...(idx.weights
+            ? { weights: idx.weights as Record<string, number> }
+            : {}),
         }));
 
         return {
@@ -203,21 +228,19 @@ export const getDbStatus = async (): Promise<DbStatus> => {
     connected,
     readyState,
     readyStateLabel: READY_STATE_LABELS[readyState] || 'connected',
-    mode: connectionMode,
-    host: sanitizeHost(mongoose.connection.host || activeHost),
+    mode: cached.mode,
+    host: sanitizeHost(mongoose.connection.host || cached.host),
     databaseName: mongoose.connection.name || 'doctor-tracker',
-    ...(externalConnectionWarning ? { warning: externalConnectionWarning } : {}),
+    ...(cached.warning ? { warning: cached.warning } : {}),
     collections,
   };
 };
 
 export const disconnectDB = async (): Promise<void> => {
   await mongoose.disconnect();
-  if (memoryServer) {
-    await memoryServer.stop();
-    memoryServer = null;
-  }
-  connectionMode = 'disconnected';
+  cached.conn = null;
+  cached.promise = null;
+  cached.mode = 'disconnected';
 };
 
 export default connectDB;
