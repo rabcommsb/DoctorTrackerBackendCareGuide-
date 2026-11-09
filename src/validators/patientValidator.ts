@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { objectIdSchema } from './doctorValidator.ts';
+import { objectIdSchema } from './doctorValidator';
 
 export const patientIdParamSchema = z.object({
   id: objectIdSchema,

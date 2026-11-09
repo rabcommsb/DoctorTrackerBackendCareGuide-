@@ -7,8 +7,8 @@ import {
   getDoctorFilterOptions,
   getDoctorPatients,
   getDoctors,
-} from '../controllers/doctorController.ts';
-import { auth, requireRole } from '../middleware/auth.ts';
+} from '../controllers/doctorController';
+import { auth, requireRole } from '../middleware/auth';
 
 const router = Router();
 

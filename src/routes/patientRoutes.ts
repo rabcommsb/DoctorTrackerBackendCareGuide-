@@ -4,8 +4,8 @@ import {
   getPatientFilterOptions,
   getPatients,
   updatePatient,
-} from '../controllers/patientController.ts';
-import { auth, requireRole } from '../middleware/auth.ts';
+} from '../controllers/patientController';
+import { auth, requireRole } from '../middleware/auth';
 
 const router = Router();
 

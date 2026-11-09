@@ -5,8 +5,8 @@ import {
   login,
   logout,
   runJwtSecurityDiagnostic,
-} from '../controllers/authController.ts';
-import { auth, requireRole } from '../middleware/auth.ts';
+} from '../controllers/authController';
+import { auth, requireRole } from '../middleware/auth';
 
 const router = Router();
 

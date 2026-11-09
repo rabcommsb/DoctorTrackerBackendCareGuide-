@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
-import { User } from '../models/User.ts';
-import { Doctor } from '../models/Doctor.ts';
-import { Patient } from '../models/Patient.ts';
+import { User } from '../models/User';
+import { Doctor } from '../models/Doctor';
+import { Patient } from '../models/Patient';
 
 interface MongooseGlobalCache {
   conn: typeof mongoose | null;

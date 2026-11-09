@@ -5,7 +5,7 @@ import {
   NotBeforeError,
   TokenExpiredError,
   verifyAccessToken,
-} from '../utils/auth.ts';
+} from '../utils/auth';
 
 export interface AuthenticatedUser {
   id: string;

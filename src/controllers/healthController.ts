@@ -1,11 +1,11 @@
 import { Request, Response } from 'express';
-import { connectDB, getDbStatus } from '../config/db.ts';
+import { connectDB, getDbStatus } from '../config/db';
 import {
   ALLOWED_JWT_ALGORITHMS,
   DEFAULT_ACCESS_TOKEN_TTL,
   DEFAULT_REFRESH_TOKEN_TTL,
-} from '../utils/auth.ts';
-import { asyncHandler } from '../utils/asyncHandler.ts';
+} from '../utils/auth';
+import { asyncHandler } from '../utils/asyncHandler';
 
 export const getHealth = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   if (req.query.reconnect === 'true') {

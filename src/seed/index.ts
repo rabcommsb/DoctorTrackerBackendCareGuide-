@@ -1,2 +1,2 @@
-export { seedDatabase, runCliSeed } from './seed.ts';
-import './seed.ts';
+export { seedDatabase, runCliSeed } from './seed';
+import './seed';

@@ -1,3 +1,3 @@
-export { User, type IUser } from './User.ts';
-export { Doctor, type IDoctor } from './Doctor.ts';
-export { Patient, type IPatient } from './Patient.ts';
+export { User, type IUser } from './User';
+export { Doctor, type IDoctor } from './Doctor';
+export { Patient, type IPatient } from './Patient';

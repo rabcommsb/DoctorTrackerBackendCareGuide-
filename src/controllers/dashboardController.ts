@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
-import { Doctor } from '../models/Doctor.ts';
-import { Patient } from '../models/Patient.ts';
-import { dashboardStatsQuerySchema } from '../validators/dashboardValidator.ts';
-import { asyncHandler } from '../utils/asyncHandler.ts';
+import { Doctor } from '../models/Doctor';
+import { Patient } from '../models/Patient';
+import { dashboardStatsQuerySchema } from '../validators/dashboardValidator';
+import { asyncHandler } from '../utils/asyncHandler';
 
 /**
  * Helper: Generates an array of YYYY-MM-DD UTC date strings for the last `days` days

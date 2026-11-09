@@ -1,19 +1,19 @@
 import { Request, Response } from 'express';
 import { Types } from 'mongoose';
-import { Patient } from '../models/Patient.ts';
-import { Doctor } from '../models/Doctor.ts';
+import { Patient } from '../models/Patient';
+import { Doctor } from '../models/Doctor';
 import {
   listPatientsQuerySchema,
   patientIdParamSchema,
   updatePatientSchema,
-} from '../validators/patientValidator.ts';
+} from '../validators/patientValidator';
 import {
   buildDateRangeFilter,
   buildPaginationMeta,
   getPaginationParams,
   parseSortParam,
-} from '../utils/queryHelpers.ts';
-import { asyncHandler } from '../utils/asyncHandler.ts';
+} from '../utils/queryHelpers';
+import { asyncHandler } from '../utils/asyncHandler';
 
 /**
  * GET /api/patients

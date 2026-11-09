@@ -1,10 +1,10 @@
 import 'dotenv/config';
 import { fileURLToPath } from 'url';
 import mongoose, { Types } from 'mongoose';
-import { User } from '../models/User.ts';
-import { Doctor } from '../models/Doctor.ts';
-import { Patient } from '../models/Patient.ts';
-import { hashPassword } from '../utils/auth.ts';
+import { User } from '../models/User';
+import { Doctor } from '../models/Doctor';
+import { Patient } from '../models/Patient';
+import { hashPassword } from '../utils/auth';
 
 type PatientGender = 'Male' | 'Female' | 'Other';
 
@@ -224,7 +224,7 @@ export const seedDatabase = async (): Promise<SeedResult> => {
  * Standalone CLI runner (`npm run seed` or `tsx src/seed/seed.ts`)
  */
 export const runCliSeed = async (): Promise<void> => {
-  const { connectDB, disconnectDB } = await import('../config/db.ts');
+  const { connectDB, disconnectDB } = await import('../config/db');
   try {
     console.log('[seed] Connecting to MongoDB...');
     await connectDB();

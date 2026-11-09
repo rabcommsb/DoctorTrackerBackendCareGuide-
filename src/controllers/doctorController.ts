@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { Types } from 'mongoose';
-import { Doctor } from '../models/Doctor.ts';
-import { Patient } from '../models/Patient.ts';
+import { Doctor } from '../models/Doctor';
+import { Patient } from '../models/Patient';
 import {
   createDoctorSchema,
   createPatientForDoctorSchema,
@@ -9,14 +9,14 @@ import {
   doctorPatientParamsSchema,
   listDoctorPatientsQuerySchema,
   listDoctorsQuerySchema,
-} from '../validators/doctorValidator.ts';
+} from '../validators/doctorValidator';
 import {
   buildDateRangeFilter,
   buildPaginationMeta,
   getPaginationParams,
   parseSortParam,
-} from '../utils/queryHelpers.ts';
-import { asyncHandler } from '../utils/asyncHandler.ts';
+} from '../utils/queryHelpers';
+import { asyncHandler } from '../utils/asyncHandler';
 
 /**
  * POST /api/doctors

@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { getDashboardStats } from '../controllers/dashboardController.ts';
-import { auth, requireRole } from '../middleware/auth.ts';
+import { getDashboardStats } from '../controllers/dashboardController';
+import { auth, requireRole } from '../middleware/auth';
 
 const router = Router();
 

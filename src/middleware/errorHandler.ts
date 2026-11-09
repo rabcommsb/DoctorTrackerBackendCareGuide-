@@ -5,8 +5,8 @@ import {
   JsonWebTokenError,
   NotBeforeError,
   TokenExpiredError,
-} from '../utils/auth.ts';
-import { asyncHandler } from '../utils/asyncHandler.ts';
+} from '../utils/auth';
+import { asyncHandler } from '../utils/asyncHandler';
 
 export { asyncHandler };
 

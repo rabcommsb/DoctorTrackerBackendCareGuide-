@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
-import { User } from '../models/User.ts';
+import { User } from '../models/User';
 import {
   ALLOWED_JWT_ALGORITHMS,
   DEFAULT_ACCESS_TOKEN_TTL,
@@ -13,10 +13,10 @@ import {
   signAccessToken,
   signRefreshToken,
   verifyAccessToken,
-} from '../utils/auth.ts';
-import { AuthRequest } from '../middleware/auth.ts';
-import { loginSchema } from '../validators/authValidator.ts';
-import { asyncHandler } from '../utils/asyncHandler.ts';
+} from '../utils/auth';
+import { AuthRequest } from '../middleware/auth';
+import { loginSchema } from '../validators/authValidator';
+import { asyncHandler } from '../utils/asyncHandler';
 
 /**
  * POST /api/auth/login

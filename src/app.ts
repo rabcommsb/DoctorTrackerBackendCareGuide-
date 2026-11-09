@@ -1,31 +1,34 @@
 import 'dotenv/config';
-import express from 'express';
+import express, { Router } from 'express';
 import helmet from 'helmet';
-import cors from 'cors';
+import cors, { CorsOptions } from 'cors';
 import morgan from 'morgan';
-import healthRoutes from './routes/healthRoutes.ts';
-import authRoutes from './routes/authRoutes.ts';
-import doctorRoutes from './routes/doctorRoutes.ts';
-import patientRoutes from './routes/patientRoutes.ts';
-import dashboardRoutes from './routes/dashboardRoutes.ts';
-import { auth, requireRole } from './middleware/auth.ts';
+import healthRoutes from './routes/healthRoutes';
+import authRoutes from './routes/authRoutes';
+import doctorRoutes from './routes/doctorRoutes';
+import patientRoutes from './routes/patientRoutes';
+import dashboardRoutes from './routes/dashboardRoutes';
+import { auth, requireRole } from './middleware/auth';
 import {
   asyncHandler,
   errorHandler,
   notFound,
-} from './middleware/errorHandler.ts';
-import { seedDatabase } from './seed/seed.ts';
+} from './middleware/errorHandler';
+import { seedDatabase } from './seed/seed';
 
 /**
  * Builds and exports the Express application (middleware, routes, error handlers)
- * WITHOUT calling `app.listen()` or connecting to MongoDB at import time.
+ * WITHOUT calling `app.listen()` or connecting to MongoDB.
  */
 const app = express();
 
-// Trust proxy for accurate client IP detection behind Vercel / Render reverse proxies
+// Optional router used only by src/server.ts for local preview UI
+export const localFrontendRouter = Router();
+
+// Trust reverse proxy headers (Vercel / Render)
 app.set('trust proxy', 1);
 
-// Security headers via Helmet
+// Security headers
 app.use(
   helmet({
     contentSecurityPolicy: false,
@@ -34,56 +37,41 @@ app.use(
   })
 );
 
-// CORS configured with CLIENT_URL origin (supports comma-separated origins & strips trailing slashes)
-const rawClientUrl = process.env.CLIENT_URL?.trim();
-const allowedOrigins =
-  rawClientUrl && rawClientUrl.startsWith('http')
-    ? rawClientUrl
-        .split(',')
-        .map((origin) => origin.trim().replace(/\/+$/, ''))
-        .filter(Boolean)
-    : ['http://localhost:3000', 'http://localhost:5173'];
+// 1. CORS Configuration:
+// - origin: process.env.CLIENT_URL (stripped of any trailing slash)
+// - methods: GET, POST, PATCH, DELETE, OPTIONS
+// - allowedHeaders: Content-Type, Authorization
+const clientUrl = process.env.CLIENT_URL
+  ? process.env.CLIENT_URL.trim().replace(/\/+$/, '')
+  : 'http://localhost:3000';
 
-app.use(
-  cors({
-    origin: (requestOrigin, callback) => {
-      if (!requestOrigin) {
-        callback(null, true);
-        return;
-      }
-      const normalizedRequestOrigin = requestOrigin.replace(/\/+$/, '');
-      if (allowedOrigins.includes(normalizedRequestOrigin)) {
-        callback(null, true);
-        return;
-      }
-      callback(null, allowedOrigins[0]);
-    },
-    credentials: true,
-  })
-);
+const corsOptions: CorsOptions = {
+  origin: clientUrl,
+  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+  optionsSuccessStatus: 204,
+};
 
-// Request logging and 1mb JSON body limit
+app.use(cors(corsOptions));
+
+// Handle preflight OPTIONS requests for all routes before authentication middleware
+app.options('*', cors(corsOptions));
+
+// Logging & 1mb JSON body parser
 app.use(morgan('dev'));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
-// Public root health endpoint: GET / -> {"status":"ok"}
-app.get('/', (_req, res) => {
-  res.status(200).json({
-    status: 'ok',
-    service: 'doctor-tracker-api',
-    timestamp: new Date().toISOString(),
-  });
-});
-
-// Public health check endpoint: GET /api/health -> {"status":"ok", ...}
+// 2. Public Health Route: GET /api/health -> {"status":"ok", ...}
 app.use('/api', healthRoutes);
 
 // Global API Authentication & Authorization Guard:
 // Applies `auth` + `requireRole("admin")` to ALL /api/* routes except
-// POST /api/auth/login and GET /api/health
+// OPTIONS preflight, POST /api/auth/login, and GET /api/health
 app.use('/api', (req, res, next) => {
   if (
+    req.method === 'OPTIONS' ||
     (req.path === '/auth/login' && req.method === 'POST') ||
     (req.path === '/health' && req.method === 'GET')
   ) {
@@ -100,19 +88,20 @@ app.use('/api', (req, res, next) => {
   });
 });
 
-// B2 Auth routes (/api/auth/login, /api/auth/me, /api/auth/logout, /api/auth/verify-diagnostic)
+// Mounted /api/* routes:
+// - /api/auth/login, /api/auth/me, /api/auth/logout
 app.use('/api/auth', authRoutes);
 
-// B3 Doctor management routes (/api/doctors)
+// - /api/doctors, /api/doctors/filters/options, /api/doctors/:id, /api/doctors/:id/patients
 app.use('/api/doctors', doctorRoutes);
 
-// B4 Patient management routes (/api/patients)
+// - /api/patients, /api/patients/filters/options, /api/patients/:id
 app.use('/api/patients', patientRoutes);
 
-// B5 Dashboard analytics routes (/api/dashboard/stats)
+// - /api/dashboard/stats
 app.use('/api/dashboard', dashboardRoutes);
 
-// B6 On-demand Seed endpoint (protected by auth + requireRole("admin"))
+// - /api/seed (protected on-demand database seed)
 app.post(
   '/api/seed',
   asyncHandler(async (_req, res) => {
@@ -124,6 +113,35 @@ app.post(
     });
   })
 );
+
+// Catch-all 404 for unmatched /api/* routes
+app.use('/api', notFound);
+
+// Root endpoint GET / -> {"status":"ok"} on Vercel or API clients
+app.get('/', (req, res, next) => {
+  const acceptsHtml = (req.headers.accept || '').includes('text/html');
+  if (process.env.VERCEL || req.query.format === 'json' || !acceptsHtml) {
+    res.status(200).json({
+      status: 'ok',
+      service: 'doctor-tracker-api',
+      timestamp: new Date().toISOString(),
+    });
+    return;
+  }
+  next();
+});
+
+// Mount optional local preview router (used only by src/server.ts in local dev)
+app.use(localFrontendRouter);
+
+// Fallback GET / returning {"status":"ok"}
+app.get('/', (_req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    service: 'doctor-tracker-api',
+    timestamp: new Date().toISOString(),
+  });
+});
 
 // 404 Not Found handler
 app.use(notFound);

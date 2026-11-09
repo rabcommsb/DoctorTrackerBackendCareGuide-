@@ -1,12 +1,33 @@
 import 'dotenv/config';
-import app from './app.ts';
-import { connectDB } from './config/db.ts';
-import { User } from './models/User.ts';
-import { seedDatabase } from './seed/seed.ts';
+import express from 'express';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import app, { localFrontendRouter } from './app';
+import { connectDB } from './config/db';
+import { User } from './models/User';
+import { seedDatabase } from './seed/seed';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const PORT = Number(process.env.PORT || 3000);
 
 const startServer = async (): Promise<void> => {
+  // Attach interactive API Explorer UI for local/preview browser access
+  if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: 'spa',
+    });
+    localFrontendRouter.use(vite.middlewares);
+  } else {
+    const distPath = path.resolve(__dirname, '../dist');
+    localFrontendRouter.use(express.static(distPath));
+    localFrontendRouter.get('*', (_req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  }
+
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`[server] doctor-tracker-api listening on http://0.0.0.0:${PORT}`);
     console.log(`[server] Health endpoint ready at http://0.0.0.0:${PORT}/api/health`);
