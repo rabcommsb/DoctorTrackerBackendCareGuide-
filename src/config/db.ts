@@ -106,6 +106,7 @@ const establishConnection = async (): Promise<typeof mongoose> => {
       return conn;
     } catch (err) {
       cached.warning = (err as Error).message;
+      console.error('[db] Error connecting to MongoDB:', err);
       if (process.env.VERCEL) {
         throw new Error(`[db] Cannot connect to MongoDB Atlas (check MONGODB_URI): ${cached.warning}`);
       }
