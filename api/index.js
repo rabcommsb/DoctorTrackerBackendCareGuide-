@@ -169340,13 +169340,21 @@ app.get("/", (_req, res) => {
 });
 app.use(notFound);
 app.use(errorHandler);
-var app_default = app;
 
 // api/index.ts
 init_db();
 var index_default = async (req, res) => {
-  await connectDB();
-  return app_default(req, res);
+  try {
+    await connectDB();
+    return app(req, res);
+  } catch (error62) {
+    console.error("Serverless function invocation failed:", error62);
+    return res.status(500).json({
+      status: "error",
+      message: "Internal Server Error (Function Invocation Failed)",
+      error: error62 instanceof Error ? error62.message : "Unknown error"
+    });
+  }
 };
 export {
   index_default as default
