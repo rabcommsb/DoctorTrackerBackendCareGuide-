@@ -32,8 +32,6 @@ const sanitizeHost = (uriOrHost: string): string => {
 
 /**
  * Normalizes and validates a MongoDB connection string from process.env.MONGODB_URI.
- * Strips accidental surrounding quotes or `MONGODB_URI=` prefixes and verifies
- * that the scheme starts with `mongodb://` or `mongodb+srv://`.
  */
 const normalizeMongoUri = (raw?: string): string | null => {
   if (!raw) return null;
@@ -109,12 +107,14 @@ const establishConnection = async (): Promise<typeof mongoose> => {
     } catch (err) {
       cached.warning = (err as Error).message;
       if (process.env.VERCEL) {
-        throw err;
+        throw new Error(`[db] Cannot connect to MongoDB Atlas (check MONGODB_URI): ${cached.warning}`);
       }
       console.log(
         `[db] External MONGODB_URI unreachable (${cached.warning}). Falling back to local in-memory MongoDB.`
       );
     }
+  } else if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
+    throw new Error('[db] Invalid or missing MONGODB_URI in production environment.');
   }
 
   // Local dev fallback: dynamically import MongoMemoryServer only when needed
@@ -134,9 +134,7 @@ const establishConnection = async (): Promise<typeof mongoose> => {
 };
 
 /**
- * Connects to MongoDB and caches the connection and pending promise on `globalThis.__mongooseCache`
- * so Vercel serverless warm invocations reuse the active connection without reconnecting.
- * Does NOT call `syncIndexes()` on requests (index syncing is restricted to `src/seed/seed.ts`).
+ * Connects to MongoDB and caches the connection and pending promise on `globalThis.__mongooseCache`.
  */
 export const connectDB = async (
   forceReconnect = false
