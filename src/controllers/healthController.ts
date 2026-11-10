@@ -22,7 +22,11 @@ export const getHealth = asyncHandler(async (req: Request, res: Response): Promi
     environment: {
       nodeEnv: process.env.NODE_ENV || 'development',
       port: Number(process.env.PORT || 3000),
-      clientUrl: process.env.CLIENT_URL || 'http://localhost:3000',
+      clientUrl: (
+        process.env.CLIENT_URL || 'https://doctor-tracker-frontend-care-guide.vercel.app'
+      )
+        .trim()
+        .replace(/\/+$/, ''),
       jwtConfigured: envSecret.length >= 32,
       jwtSecretSource:
         envSecret.length >= 32

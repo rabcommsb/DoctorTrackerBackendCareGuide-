@@ -16,4 +16,4 @@ services:
       - key: JWT_EXPIRES_IN
         value: 15m
       - key: CLIENT_URL
-        sync: false
+        value: https://doctor-tracker-frontend-care-guide.vercel.app

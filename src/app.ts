@@ -28,25 +28,53 @@ export const localFrontendRouter = Router();
 // Trust reverse proxy headers (Vercel / Render)
 app.set('trust proxy', 1);
 
-// Security headers
+// Security headers (configured for cross-origin API & iframe preview compatibility)
 app.use(
   helmet({
     contentSecurityPolicy: false,
     crossOriginEmbedderPolicy: false,
+    crossOriginOpenerPolicy: false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
     frameguard: false,
   })
 );
 
 // 1. CORS Configuration:
-// - origin: process.env.CLIENT_URL (stripped of any trailing slash)
+// - origin: process.env.CLIENT_URL (no trailing slash) + https://doctor-tracker-frontend-care-guide.vercel.app
 // - methods: GET, POST, PATCH, DELETE, OPTIONS
 // - allowedHeaders: Content-Type, Authorization
-const clientUrl = process.env.CLIENT_URL
-  ? process.env.CLIENT_URL.trim().replace(/\/+$/, '')
-  : 'http://localhost:3000';
+const clientUrl = (
+  process.env.CLIENT_URL && process.env.CLIENT_URL.trim().startsWith('http')
+    ? process.env.CLIENT_URL
+    : 'https://doctor-tracker-frontend-care-guide.vercel.app'
+)
+  .trim()
+  .replace(/\/+$/, '');
+
+const allowedOrigins = new Set([
+  clientUrl,
+  'https://doctor-tracker-frontend-care-guide.vercel.app',
+  'http://localhost:3000',
+  'http://localhost:5173',
+]);
 
 const corsOptions: CorsOptions = {
-  origin: clientUrl,
+  origin: (requestOrigin, callback) => {
+    if (!requestOrigin) {
+      callback(null, clientUrl);
+      return;
+    }
+    const normalized = requestOrigin.replace(/\/+$/, '');
+    if (
+      allowedOrigins.has(normalized) ||
+      normalized.endsWith('.run.app') ||
+      normalized.endsWith('.vercel.app')
+    ) {
+      callback(null, normalized);
+      return;
+    }
+    callback(null, clientUrl);
+  },
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
